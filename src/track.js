@@ -31,7 +31,7 @@ export function layout(L, r) {
       if (h + rise > 22 || h + rise < -3) rise = -rise;
       h += rise;
       add('slope', 32 + r() * 25, { rise });
-    } else if (p < 0.82) add('tunnel', 36 + r() * 26, { yaw: (r() - 0.5) * 0.5 });
+    } else if (p < 0.82) add('tunnel', 30 + r() * 20);    // straight: what comes is always in sight
     else if (s > 120) add('fork', 90 + r() * 30, { kind: r() < 0.5 ? 'lr' : 'ud' });
     else add('straight', 30);
   }

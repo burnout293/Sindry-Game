@@ -40,7 +40,7 @@ function blot(cx, cy, r, alpha) {
 
 export function init(el) { canvas = el; x = canvas.getContext('2d'); resize(); }
 export function resize() {
-  dpr = Math.min(2, window.devicePixelRatio || 1);
+  dpr = Math.min(matchMedia('(pointer: coarse)').matches ? 1.25 : 2, window.devicePixelRatio || 1);
   W = canvas.clientWidth || innerWidth; H = canvas.clientHeight || innerHeight;
   canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
 }

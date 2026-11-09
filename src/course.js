@@ -13,15 +13,15 @@ import { buildTrack, forkAt } from './track.js';
 export const M_PER_UNIT = 2.75;                // 1 unit = the 2D game's 27.5 px = 2.75 m
 export const LANES = [-2, 0, 2];
 export const LANE_W = 2, HALF_W = 3;
-export const BLOCK = 1.25, SPIKE_H = 0.75, PLAT_T = 0.55, PILE_H = 2.5, WAGON_H = 3, GANTRY = [1.3, 4.6];
+export const BLOCK = 1.25, COIN_GAP = 1.7, SPIKE_H = 0.75, PLAT_T = 0.55, PILE_H = 2.5, WAGON_H = 3, GANTRY = [1.3, 4.6];
 
 export function rng(seed) {
   let a = seed >>> 0;
   return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
-/** Course n is 1 200 m long, then 300 m more each time. */
-export const lengthOf = (n) => (1200 + 300 * (n - 1)) / M_PER_UNIT;
+/** Course n is 3 600 m long, then 900 m more each time. */
+export const lengthOf = (n) => (3600 + 900 * (n - 1)) / M_PER_UNIT;
 const laneSpan = (first, count) => [LANES[first] - LANE_W / 2 + 0.1, LANES[first + count - 1] + LANE_W / 2 - 0.1];
 const inLane = (l) => [LANES[l] - LANE_W / 2 + 0.15, LANES[l] + LANE_W / 2 - 0.15];
 
@@ -32,18 +32,24 @@ const inLane = (l) => [LANES[l] - LANE_W / 2 + 0.15, LANES[l] + LANE_W / 2 - 0.1
  * x1, y } landed on. Tokens: turbos and réglages { s, x, y, branch }.
  * branch is null on the trunk, 'A' or 'B' in a fork.
  */
-export function buildCourse(n, seed) {
-  const r = rng(seed * 31 + n * 7919);
+/**
+ * opts: { blocked: a lane closed by roadworks the whole course, or null; coins:
+ * how many coins on the road, 1 by default }. With a lane closed, the two
+ * others are never both blocked by anything you cannot jump or slide under.
+ */
+export function buildCourse(n, seed, opts = {}) {
+  const r = rng(seed * 31 + n * 7919), blockedLane = opts.blocked ?? null, open = [0, 1, 2].filter((l) => l !== blockedLane);
   const L = lengthOf(n), diff = Math.min(1, (n - 1) / 8);
   const track = buildTrack(L, r);
   const obs = [], holes = [], wagons = [], plats = [];
 
   // One event at s on a branch: what it puts down, and how long it lasts.
   function event(s, branch, roomy) {
-    const p = r(), lanes3 = [0, 1, 2].sort(() => r() - 0.5);
+    const p = r(), lanes3 = [...open].sort(() => r() - 0.5);
     if (p < 0.18) {
-      const k = r() < 0.4 + 0.3 * diff ? 2 : 1;
-      for (const l of lanes3.slice(0, k)) { const [x0, x1] = inLane(l); obs.push({ t: 'bloc', s0: s, s1: s + BLOCK, x0, x1, y0: 0, y1: BLOCK, branch }); }
+      // Wooden crates: one or two lanes, never every open one.
+      const k = Math.min(open.length - 1, r() < 0.4 + 0.3 * diff ? 2 : 1);
+      for (const l of lanes3.slice(0, k)) { const [x0, x1] = inLane(l); obs.push({ t: 'caisse', s0: s, s1: s + BLOCK, x0, x1, y0: 0, y1: BLOCK, branch }); }
       return BLOCK;
     }
     if (p < 0.32) {
@@ -53,7 +59,7 @@ export function buildCourse(n, seed) {
     }
     if (p < 0.46) {
       // A gantry: slide under it. Over every lane but one, sometimes all three.
-      const all = r() < 0.3 + 0.3 * diff;
+      const all = r() < 0.3 + 0.3 * diff || open.length < 3;
       for (const l of all ? lanes3 : lanes3.slice(0, 2)) { const [x0, x1] = inLane(l); obs.push({ t: 'portique', s0: s, s1: s + 0.8, x0, x1, y0: GANTRY[0], y1: GANTRY[1], branch }); }
       return 0.8;
     }
@@ -64,7 +70,7 @@ export function buildCourse(n, seed) {
     }
     if (p < 0.76) {
       // Wagons: long boxes to ride on, one with a ramp to climb.
-      const len = 14 + r() * 18, k = 1 + (r() < 0.5 ? 1 : 0);
+      const len = 14 + r() * 18, k = Math.min(open.length - 1, 1 + (r() < 0.5 ? 1 : 0));
       lanes3.slice(0, k).forEach((l, i) => {
         const [x0, x1] = inLane(l), ramp = i === 0 && r() < 0.75;
         wagons.push({ s0: s + (ramp ? 6 : 0), s1: s + (ramp ? 6 : 0) + len, x0, x1, h: WAGON_H, ramp, branch });
@@ -91,7 +97,7 @@ export function buildCourse(n, seed) {
     while (s < fork.s0 - 34) s += event(s, null, !tunnelAt(s)) + gap();
     if (fork.end) break;
     // The wall where the branches part: the middle lane must choose.
-    obs.push({ t: 'mur', s0: fork.s0 - 4, s1: fork.s0 + 2, x0: -0.85, x1: 0.85, y0: 0, y1: 3.6, branch: null });
+    if (blockedLane !== 1) obs.push({ t: 'mur', s0: fork.s0 - 4, s1: fork.s0 + 2, x0: -0.85, x1: 0.85, y0: 0, y1: 3.6, branch: null });
     for (const b of ['A', 'B']) {
       let sb = fork.s0 + 30;
       while (sb < fork.s1 - 30) sb += event(sb, b, true) + gap();
@@ -114,14 +120,28 @@ export function buildCourse(n, seed) {
     taken.push(ss);
     return { s: ss, x, y: 1, branch: null, taken: false };
   };
-  const turbos = [place(), place()].sort((a, b) => a.s - b.s);
-  const reglages = [place(), place()];
-  for (const fork of track.forks) {
-    const b = r() < 0.5 ? 'A' : 'B';
-    const ss = fork.s1 - 34, x = LANES[Math.floor(r() * 3)];
-    reglages.push({ s: ss, x, y: blocked(ss, x, b, 2) ? 4.5 : 1, branch: b, taken: false });
+  const turbos = [place(), place(), place(), place()].filter((q) => q.x !== LANES[blockedLane]).sort((a, b) => a.s - b.s);
+  // Coins: rows along a lane, over the crates and holes in an arc, on the wagons' roofs.
+  const coins = [];
+  const forkSide = (s, l) => (forkAt(track, s) ? (l === 0 ? 'A' : 'B') : null);
+  for (let s0 = 60; s0 < L - 40; s0 += (16 + r() * 18) / (opts.coins ?? 1)) {
+    const l = open[Math.floor(r() * open.length)], x = LANES[l], count = 6 + Math.floor(r() * 5);
+    for (let i = 0; i < count; i++) {
+      const s = s0 + i * COIN_GAP, branch = forkSide(s, l);
+      if (s > L - 20) break;
+      const w = wagons.find((q) => q.branch === branch && s > q.s0 - 0.5 && s < q.s1 && x > q.x0 && x < q.x1);
+      const hole = holes.find((h) => h.branch === branch && s > h.s0 - 2 && s < h.s1 + 2);
+      const o = obs.find((q) => q.branch === branch && s > q.s0 - 1.2 && s < q.s1 + 1.2 && x > q.x0 && x < q.x1);
+      let y = 1;
+      if (w) y = w.h + 1;
+      else if (hole) y = 1 + 3 * Math.sin(Math.PI * Math.min(1, Math.max(0, (s - hole.s0 + 2) / (hole.s1 - hole.s0 + 4))));
+      else if (o && o.t === 'portique') y = 0.6;
+      else if (o) y = o.y1 + 1.4;
+      coins.push({ s, x, y, branch, taken: false });
+    }
   }
-  return { n, L, track, obs, holes, wagons, plats, turbos, reglages };
+  const works = blockedLane === null ? null : { lane: blockedLane, x0: inLane(blockedLane)[0], x1: inLane(blockedLane)[1] };
+  return { n, L, track, obs, holes, wagons, plats, turbos, coins, works };
 }
 
 /** The branch a point is on: the one chosen in a fork, none elsewhere. */
@@ -154,7 +174,7 @@ export function supportAt(c, s, x, yb, branch) {
 
 /** Hazards the wheel can hit here: obstacles, and the fronts of wagons. */
 export function hazardsNear(c, s, branch) {
-  const list = c.obs.filter((o) => here(o, branch) && o.s0 < s + 2 && o.s1 > s - 2);
+  const list = c.obs.filter((o) => !o.gone && here(o, branch) && o.s0 < s + 2 && o.s1 > s - 2);
   for (const w of c.wagons) if (here(w, branch) && w.s0 < s + 2 && w.s1 > s - 2) list.push({ t: 'wagon', s0: w.s0, s1: w.s0 + 0.6, x0: w.x0, x1: w.x1, y0: 0, y1: w.h - 0.4 });
   return list;
 }

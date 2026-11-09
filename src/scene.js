@@ -108,7 +108,7 @@ function buildGear(missing) {
   // The rim: the icon's teeth, a ring inside.
   const rim = gearShape(missing);
   rim.holes.push(circle(0.6, true));
-  g.add(drawn(alongX(new THREE.ExtrudeGeometry(rim, { depth: WHEEL_T, bevelEnabled: true, bevelThickness: 0.035, bevelSize: 0.03, bevelSegments: 1, curveSegments: 6 }), WHEEL_T), PAPER_MAT, INK_THICK, 20));
+  g.add(drawn(alongX(new THREE.ExtrudeGeometry(rim, { depth: WHEEL_T, bevelEnabled: true, bevelThickness: 0.035, bevelSize: 0.03, bevelSegments: 1, curveSegments: 6 }), WHEEL_T), [faceMat(), PAPER_MAT], INK_THICK, 20));
   // The web, thinner and pierced with six holes.
   const web = new THREE.Shape(); web.absarc(0, 0, 0.61, 0, Math.PI * 2, false);
   web.holes.push(circle(0.34, true));
@@ -125,9 +125,16 @@ function buildGear(missing) {
   g.add(drawn(new THREE.CylinderGeometry(0.11, 0.11, WHEEL_T + 0.34, 16).rotateZ(Math.PI / 2), PAPER_MAT, INK_THIN, 30));
   return g;
 }
+let skinId = 'origine';
+function faceMat() {
+  if (skinId === 'origine') return PAPER_MAT;
+  const t = tex(`skin-${skinId}`, () => ART.skin(skinId), true).clone(); t.needsUpdate = true; t.repeat.set(1.5, 1.5);
+  return surface({ map: t });
+}
+export function setSkin(id) { if (id !== skinId) { skinId = id; missingKey = null; } }
 let missingKey = null;
 export function setMissing(missing) {
-  const key = [...missing].sort().join(',');
+  const key = [...missing].sort().join(',') + skinId;
   if (key === missingKey) return;
   missingKey = key;
   if (gearMeshes) { spinner.remove(gearMeshes); disposeTree(gearMeshes); }
@@ -201,8 +208,9 @@ function tunnel(tr, sa, sb, branch) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  const inside = surface({ map: tex('hatchFine', ART.hatchingFine, true), side: THREE.DoubleSide });
-  g.add(new THREE.Mesh(geo, inside), segments(ribs, INK_THIN), segments(polyline(crown), INK_FINE));
+  // Ribs only, no shell: what comes next stays in sight through the tunnel.
+  geo.dispose();
+  g.add(segments(ribs, INK_THIN), segments(polyline(crown), INK_FINE));
   // Portals: an arch-shaped frame, thick, at both ends.
   // One horseshoe outline: up the outer arch, down to the road, back under the inner arch.
   const frame = new THREE.Shape();
@@ -264,8 +272,8 @@ function trackRanges(c) {
 let BLOCK_GEO = null;
 function block(y0, hatchIt) {
   BLOCK_GEO ||= new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
-  const front = hatchIt ? matOf('stripes', ART.stripes, true) : matOf('padlock', ART.padlock);
-  const g = drawn(BLOCK_GEO, [PAPER_MAT, PAPER_MAT, PAPER_MAT, PAPER_MAT, front, PAPER_MAT]);
+  const wood = hatchIt ? matOf('stripes', ART.stripes, true) : matOf('crate', ART.crate);
+  const g = drawn(BLOCK_GEO, wood);
   g.position.y = y0 + BLOCK / 2;
   return g;
 }
@@ -283,13 +291,15 @@ function spikeField(o) {
   geo.setAttribute('position', new THREE.BufferAttribute(out, 3));
   return drawn(geo, PAPER_MAT, INK_THIN, 20);
 }
+let marker = false;
+export function setMarker(on) { marker = on; }
 function hazards(c) {
   const tr = c.track, g = new THREE.Group();
   for (const o of c.obs) {
     const mid = (o.s0 + o.s1) / 2, xc = (o.x0 + o.x1) / 2, w = o.x1 - o.x0;
     let obj;
     if (o.t === 'pics') { obj = spikeField(o); place(obj, tr, mid, 0, 0, o.branch); g.add(obj); continue; }
-    if (o.t === 'bloc' || o.t === 'pile') {
+    if (o.t === 'caisse' || o.t === 'pile') {
       obj = new THREE.Group(); obj.add(block(0)); if (o.t === 'pile') obj.add(block(BLOCK));
     } else if (o.t === 'portique') {
       // A striped panel overhead, on two legs: slide under it.
@@ -301,6 +311,7 @@ function hazards(c) {
       obj = drawn(new THREE.BoxGeometry(w, o.y1, o.s1 - o.s0), [matOf('stripes', ART.stripes, true), matOf('stripes', ART.stripes, true), PAPER_MAT, PAPER_MAT, matOf('stripes', ART.stripes, true), PAPER_MAT]);
       obj.children[0].position.y = obj.children[1].position.y = o.y1 / 2;
     }
+    o.mesh = obj;
     g.add(place(obj, tr, mid, xc, 0, o.branch));
   }
   // Wagons: cars of 8 units, so that they follow the bends; a ramp before some.
@@ -332,12 +343,24 @@ function hazards(c) {
     const holder = place(new THREE.Group(), tr, b.s, b.x, 0.03, b.branch); holder.add(m); g.add(holder);
     return m;
   });
-  c.reglageSprites = c.reglages.map((b) => {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('reglage', ART.reglageToken), transparent: true }));
-    sp.scale.set(1.2, 1.2, 1); sp.position.fromArray(worldAt(tr, b.s, b.x, b.y, b.branch));
-    sp.userData.base = sp.position.clone(); g.add(sp);
+  const coinMat = new THREE.SpriteMaterial({ map: tex(marker ? 'coinBlue' : 'coin', () => ART.coin(marker ? ART.BLUE : ART.INK)), transparent: true });
+  c.coinSprites = c.coins.map((b) => {
+    const sp = new THREE.Sprite(coinMat);
+    sp.scale.set(0.8, 0.8, 1); sp.position.fromArray(worldAt(tr, b.s, b.x, b.y, b.branch));
+    g.add(sp);
     return sp;
   });
+  if (marker) for (const m of c.turboMeshes) m.material.color.set(ART.BLUE);
+  // Roadworks: a striped fence the whole length of the closed lane.
+  if (c.works) {
+    const w = c.works, width = w.x1 - w.x0, xc = (w.x0 + w.x1) / 2, stripes = matOf('stripes', ART.stripes, true);
+    for (let s = 30; s < c.L; s += 10) {
+      if (forkAt(tr, s)) continue;
+      const fence = drawn(new THREE.BoxGeometry(width, 1.1, 9.4), [stripes, stripes, PAPER_MAT, PAPER_MAT, stripes, stripes]);
+      fence.children[0].position.y = fence.children[1].position.y = 0.55;
+      g.add(place(fence, tr, s + 5, xc, 0));
+    }
+  }
   // A mark every 100 m, on the trunk.
   for (let m = 100; m / M_PER_UNIT < c.L; m += 100) {
     const s = m / M_PER_UNIT;
@@ -425,7 +448,8 @@ export function setCourse(c) {
 export function init(canvas) {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setClearColor(PAPER, 1);
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  // Phones: a lighter picture, so it keeps up.
+  renderer.setPixelRatio(Math.min(matchMedia('(pointer: coarse)').matches ? 1.5 : 2, window.devicePixelRatio || 1));
   scene = new THREE.Scene();
   scene.fog = new THREE.Fog(PAPER, 50, 190);
   camera = new THREE.PerspectiveCamera(62, 1, 0.1, 500);
@@ -466,7 +490,7 @@ export function resize() {
  * parts, trail (recent contact points [s, x, y, branch]), shake, speed, course }.
  */
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), tmp = new THREE.Vector3();
-const CAM_SIDE = 1.6;
+const CAM_SIDE = 0;
 let camX = CAM_SIDE, camLift = 0, flameClock = 0, first = true;
 export function render(v) {
   const tr = v.course.track;
@@ -508,7 +532,9 @@ export function render(v) {
   }
   // Tokens spin and bob; taken ones vanish.
   const c = v.course;
-  c.reglages.forEach((b, i) => { const sp = c.reglageSprites[i]; sp.visible = !b.taken; sp.position.y = sp.userData.base.y + Math.sin(v.t * 3 + b.s) * 0.18; sp.material.rotation = v.t * 2; });
+  const turn = 0.2 + 0.6 * Math.abs(Math.cos(v.t * 3));
+  c.coins.forEach((b, i) => { const sp = c.coinSprites[i]; sp.visible = !b.taken; if (sp.visible && Math.abs(b.s - v.s) < 120) sp.scale.x = turn; });
+  for (const o of c.obs) if (o.mesh) o.mesh.visible = !o.gone;
   c.turbos.forEach((b, i) => { c.turboMeshes[i].material.opacity = b.taken ? 0.2 : 1; });
   // Dust, sparks and debris.
   const pos = dust.geometry.getAttribute('position'), n = Math.min(240, v.parts.length);
@@ -528,14 +554,14 @@ export function render(v) {
     if (pts.length) { trail = segments(pts, INK_TRAIL); scene.add(trail); }
   }
   // The camera: behind and above, easing after the wheel, wider and shaking at speed.
-  // A three-quarter view from the right, so the gear's face shows, not just its tread.
+  // Centred behind the wheel.
   camX += (v.x * 0.65 + CAM_SIDE - camX) * Math.min(1, v.dt * 7);
   camLift += (Math.max(0, v.y - 1) * 0.5 - camLift) * Math.min(1, v.dt * 6);
   const look = v.s + 9, lookBranch = v.branch || (forkAt(tr, look) ? (v.x < 0 ? 'A' : 'B') : null);
   tmp.fromArray(worldAt(tr, v.s - 7.4, camX, 4 + camLift, v.branch || (forkAt(tr, v.s - 7.4) ? v.branchPrev : null)));
   const k = first ? 1 : Math.min(1, v.dt * 9);
   camPos.lerp(tmp, k);
-  tmp.fromArray(worldAt(tr, look, v.x * 0.6 - 0.3, 1.3 + camLift * 0.6, lookBranch));
+  tmp.fromArray(worldAt(tr, look, camX, 1.3 + camLift * 0.6, lookBranch));
   camLook.lerp(tmp, k);
   first = false;
   camera.position.copy(camPos);

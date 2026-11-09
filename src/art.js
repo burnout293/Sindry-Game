@@ -216,3 +216,41 @@ export function hatchingFine() {
   x.stroke();
   return c;
 }
+
+/* ---------- 0.3: crates, coins, roadworks, skins ---------- */
+export const BLUE = '#2B6CF0';                  // the Marqueur's colour, the only one besides the ink
+
+/** A wooden crate: planks, a frame, a cross brace. */
+export function crate() {
+  const [c, x] = canvas(128, 128);
+  x.fillStyle = PAPER; x.fillRect(0, 0, 128, 128);
+  x.lineWidth = 2; x.globalAlpha = 0.6;
+  for (let y = 26; y < 120; y += 25) rough(x, [[10, y], [118, y]], 2);
+  x.globalAlpha = 1;
+  rough(x, [[8, 8], [120, 8], [120, 120], [8, 120], [8, 8]], 9);
+  rough(x, [[12, 12], [116, 116]], 8); rough(x, [[116, 12], [12, 116]], 8);
+  for (const [px, py] of [[16, 16], [112, 16], [16, 112], [112, 112]]) { x.beginPath(); x.arc(px, py, 3, 0, Math.PI * 2); x.fill(); }
+  return c;
+}
+
+/** A coin, edge-on or not: a disc with a gear tooth stamped in it. */
+export function coin(color = INK) {
+  const [c, x] = canvas(64, 64);
+  x.strokeStyle = x.fillStyle = color;
+  x.beginPath(); x.arc(32, 32, 27, 0, Math.PI * 2); x.fillStyle = PAPER; x.fill(); x.lineWidth = 6; x.stroke();
+  x.beginPath(); x.arc(32, 32, 18, 0, Math.PI * 2); x.lineWidth = 2.5; x.stroke();
+  x.fillStyle = color; x.beginPath(); x.moveTo(25, 40); x.lineTo(28, 22); x.lineTo(36, 22); x.lineTo(39, 40); x.closePath(); x.fill();
+  return c;
+}
+
+/** The faces of the wheel, for each skin. */
+export function skin(id) {
+  const [c, x] = canvas(128, 128);
+  x.fillStyle = PAPER; x.fillRect(0, 0, 128, 128);
+  if (id === 'rouille') { x.lineWidth = 3; x.globalAlpha = 0.6; x.beginPath(); for (let k = -128; k < 256; k += 14) { x.moveTo(k, 128); x.lineTo(k + 128, 0); } x.stroke(); x.globalAlpha = 1; for (let i = 0; i < 26; i++) { x.beginPath(); x.arc(Math.random() * 128, Math.random() * 128, 2 + Math.random() * 6, 0, Math.PI * 2); x.fill(); } }
+  else if (id === 'pois') { for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.beginPath(); x.arc(16 + i * 32 + (j % 2) * 16, 16 + j * 32, 8, 0, Math.PI * 2); x.fill(); } }
+  else if (id === 'rayures') { for (let k = 0; k < 128; k += 32) x.fillRect(0, k, 128, 16); }
+  else if (id === 'damier') { for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2) x.fillRect(i * 32, j * 32, 32, 32); }
+  else if (id === 'nuit') { x.fillStyle = INK; x.fillRect(0, 0, 128, 128); x.strokeStyle = PAPER; x.lineWidth = 3; x.beginPath(); x.arc(64, 64, 40, 0, Math.PI * 2); x.stroke(); }
+  return c;
+}

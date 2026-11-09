@@ -109,3 +109,110 @@ export function fire() {
     },
   };
 }
+
+/* ---------- The city and its signs (0.2) ---------- */
+// A rough line: drawn twice, slightly off, so the ink looks laid by hand.
+function rough(x, pts, w) {
+  for (let pass = 0; pass < 2; pass++) {
+    x.lineWidth = w * (pass ? 0.55 : 1);
+    x.beginPath();
+    pts.forEach(([px, py], i) => { const j = pass ? (Math.random() - 0.5) * w * 0.8 : 0; if (i) x.lineTo(px + j, py + j); else x.moveTo(px + j, py + j); });
+    x.stroke();
+  }
+}
+
+/** Building windows: a grid of frames, some dark, slightly uneven. */
+export function windows() {
+  const [c, x] = canvas(128, 128);
+  x.fillStyle = PAPER; x.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    const ox = 14 + i * 64, oy = 12 + j * 64, dark = (i + j) % 3 === 0;
+    if (dark) { x.fillStyle = INK; x.globalAlpha = 0.45; x.fillRect(ox, oy, 36, 44); x.globalAlpha = 1; }
+    rough(x, [[ox, oy], [ox + 36, oy], [ox + 36, oy + 44], [ox, oy + 44], [ox, oy]], 4);
+  }
+  return c;
+}
+
+/** The side of a wagon: a band of windows over a plain skirt. */
+export function wagonSide() {
+  const [c, x] = canvas(256, 128);
+  x.fillStyle = PAPER; x.fillRect(0, 0, 256, 128);
+  for (let i = 0; i < 4; i++) rough(x, [[14 + i * 62, 22], [56 + i * 62, 22], [56 + i * 62, 62], [14 + i * 62, 62], [14 + i * 62, 22]], 5);
+  rough(x, [[0, 84], [256, 84]], 4);
+  return c;
+}
+
+/** Hazard stripes: walls and gantries. */
+export function stripes() {
+  const [c, x] = canvas(64, 64);
+  x.fillStyle = PAPER; x.fillRect(0, 0, 64, 64);
+  x.fillStyle = INK;
+  for (let k = -64; k < 128; k += 32) { x.beginPath(); x.moveTo(k, 64); x.lineTo(k + 16, 64); x.lineTo(k + 80, 0); x.lineTo(k + 64, 0); x.closePath(); x.fill(); }
+  return c;
+}
+
+/** The sign before a fork: which side goes where. */
+export function forkSign(kind) {
+  const [c, x] = canvas(512, 128);
+  x.fillStyle = PAPER; x.fillRect(0, 0, 512, 128);
+  x.lineWidth = 8; x.strokeRect(6, 6, 500, 116); rough(x, [[256, 10], [256, 118]], 6);
+  const arrow = (cx, dir) => {
+    x.save(); x.translate(cx, 64); x.rotate(dir); x.beginPath();
+    x.moveTo(-34, 0); x.lineTo(10, -34); x.lineTo(10, -14); x.lineTo(36, -14); x.lineTo(36, 14); x.lineTo(10, 14); x.lineTo(10, 34); x.closePath();
+    x.fillStyle = INK; x.fill(); x.restore();
+  };
+  if (kind === 'lr') { arrow(128, 0); arrow(384, Math.PI); }
+  else { arrow(128, Math.PI / 2); arrow(384, -Math.PI / 2); }
+  return c;
+}
+
+/** A réglage to pick up: a little gear with « +1 ». */
+export function reglageToken() {
+  const [c, x] = canvas(128, 128);
+  x.beginPath();
+  for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2, r = i % 2 ? 46 : 58; x.lineTo(64 + Math.cos(a) * r, 64 + Math.sin(a) * r); }
+  x.closePath(); x.fillStyle = PAPER; x.fill(); x.lineWidth = 7; x.stroke();
+  x.font = "800 40px 'Sindry Mono', Consolas, monospace"; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = INK;
+  x.fillText('+1', 64, 67);
+  return c;
+}
+
+/** A blot of ink, for sparks, dust and the grunge of the effects. */
+export function blot() {
+  const [c, x] = canvas(64, 64);
+  x.fillStyle = INK; x.beginPath();
+  for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2, r = 18 + Math.random() * 12; x.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); }
+  x.closePath(); x.fill();
+  for (let i = 0; i < 6; i++) { const a = Math.random() * Math.PI * 2, d = 24 + Math.random() * 6; x.beginPath(); x.arc(32 + Math.cos(a) * d, 32 + Math.sin(a) * d, 1.5 + Math.random() * 2.5, 0, Math.PI * 2); x.fill(); }
+  return c;
+}
+
+/** The ground of the city: a street grid, drawn faintly. */
+export function groundGrid() {
+  const [c, x] = canvas(256, 256);
+  x.fillStyle = PAPER; x.fillRect(0, 0, 256, 256);
+  x.globalAlpha = 0.5; x.lineWidth = 3;
+  x.strokeRect(0, 0, 256, 256);
+  x.globalAlpha = 0.25; x.lineWidth = 2;
+  x.beginPath(); x.moveTo(128, 0); x.lineTo(128, 256); x.moveTo(0, 128); x.lineTo(256, 128); x.stroke();
+  return c;
+}
+
+/** One flame of the boost's trail: a tongue, white with its outline. */
+export function flameParticle() {
+  const [c, x] = canvas(64, 96);
+  x.beginPath(); tongue2(x, 32, 88, 76, 0.15); x.fillStyle = PAPER; x.fill(); x.lineWidth = 6; x.stroke();
+  return c;
+}
+function tongue2(x, cx, cy, h, b) { x.save(); x.translate(cx, cy); tongue(x, h, b); x.restore(); }
+
+/** Fine, pale hatching: the inside of tunnels, seen up close. */
+export function hatchingFine() {
+  const [c, x] = canvas(64, 64);
+  x.fillStyle = PAPER; x.fillRect(0, 0, 64, 64);
+  x.globalAlpha = 0.45; x.lineWidth = 1.6;
+  x.beginPath();
+  for (let k = -64; k < 128; k += 16) { x.moveTo(k, 64); x.lineTo(k + 64, 0); }
+  x.stroke();
+  return c;
+}

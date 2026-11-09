@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Roue libre</title>
 <!--
-  Roue libre, Sindry's game in 3D: the wheel of Sindry's icon rolls down a
-  track drawn in black ink on white. Keyboard or gamepad. No build step: the
-  page loads its ES modules as they are, and three.js from vendor/.
+  Roue libre, Sindry's game in 3D: the wheel of Sindry's icon runs through a
+  city drawn in black ink on white. Keyboard or gamepad. No build step: the
+  page loads its ES modules as they are, and three.js from vendor/. Over the
+  3D, a 2D canvas paints the grunge effects and the speedometer.
 -->
 <style>
 @font-face { font-family: 'Sindry Mono'; font-weight: 400; src: url('fonts/sindry-mono-400.woff2') format('woff2'); }
@@ -15,7 +16,8 @@
 :root { --encre: #141A24; --papier: #FFFFFF; --mono: 'Sindry Mono', Consolas, monospace; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--papier); color: var(--encre); font: 13px/1.4 var(--mono); }
-#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#scene, #effets { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#effets { pointer-events: none; }
 button { font: inherit; color: inherit; }
 
 /* The HUD. */
@@ -28,9 +30,7 @@ button { font: inherit; color: inherit; }
 .avance { position: absolute; left: 50%; top: 22px; width: min(360px, 34vw); height: 2px; transform: translateX(-50%); background: color-mix(in srgb, var(--encre) 30%, transparent); }
 .avance i { position: absolute; left: 0; top: -1px; height: 4px; background: var(--encre); }
 .avance::after { content: ''; position: absolute; right: -14px; top: -4px; width: 10px; height: 10px; background: conic-gradient(var(--encre) 25%, var(--papier) 0 50%, var(--encre) 0 75%, var(--papier) 0); border: 1px solid var(--encre); }
-#turbo { position: absolute; left: 50%; top: 36px; transform: translateX(-50%); text-align: center; font-weight: 700; letter-spacing: .1em; }
-#turbo span { display: block; width: 90px; height: 3px; margin: 4px auto 0; border: 1px solid var(--encre); }
-#turbo i { display: block; height: 100%; background: var(--encre); }
+#multi { position: absolute; left: 50%; top: 34px; transform: translateX(-50%); font-weight: 800; letter-spacing: .12em; font-size: 14px; }
 #message { position: fixed; left: 50%; top: 30%; transform: translate(-50%, -50%); font-size: 26px; font-weight: 700; letter-spacing: .25em; opacity: 0; pointer-events: none; text-shadow: 0 0 6px var(--papier), 0 0 12px var(--papier); }
 #message.vu { animation: dit 1.2s ease-out; }
 @keyframes dit { 0% { opacity: 0; transform: translate(-50%, -30%); } 15% { opacity: 1; transform: translate(-50%, -50%); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -70%); } }
@@ -48,6 +48,10 @@ button { font: inherit; color: inherit; }
 .carte p { margin: 5px 0; }
 .pale { opacity: .62; }
 .boutons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
+.boutons.petits button, .bouton { font-size: 11.5px; padding: 4px 10px; }
+.bouton { display: inline-flex; align-items: center; border: 2px solid var(--encre); border-radius: 4px; cursor: pointer; font-weight: 600; }
+.bouton:hover { background: var(--encre); color: var(--papier); }
+.petit { font-size: 11px; margin-top: 10px; }
 .carte button { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border: 2px solid var(--encre); border-radius: 4px; background: var(--papier); cursor: pointer; font-weight: 600; }
 .carte button:hover:not(:disabled), .carte button.primaire { background: var(--encre); color: var(--papier); }
 .carte button:disabled { opacity: .3; cursor: default; }
@@ -77,11 +81,12 @@ body.manette kbd.pad { display: inline; }
 </head>
 <body>
 <canvas id="scene"></canvas>
+<canvas id="effets"></canvas>
 <div class="hud">
   <div class="hud-g"><b id="course">COURSE 1</b><span id="distance">0 m</span><div id="vies"></div></div>
   <div class="avance"><i id="avance"></i></div>
-  <div id="turbo" hidden>TURBO<span><i></i></span></div>
-  <div class="hud-d"><span id="score">0</span><div class="discret" id="total"></div><div class="discret" id="compteurs"></div></div>
+  <div id="multi"></div>
+  <div class="hud-d"><span id="score">0</span><div class="discret" id="total"></div></div>
 </div>
 <div id="message"></div>
 <div id="ecran" hidden></div>
